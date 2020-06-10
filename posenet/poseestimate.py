@@ -24,6 +24,10 @@ import os
 from PIL import Image
 import re
 from edgetpu.detection.engine import DetectionEngine
+
+import time
+import svgwrite
+import gstreamer
 from pose_engine import PoseEngine
 import tflite_runtime.interpreter as tflite
 
@@ -51,6 +55,69 @@ EDGES = (
     ('left knee', 'left ankle'),
     ('right knee', 'right ankle'),
 )
+def shadow_text(dwg, x, y, text, font_size=16):
+    dwg.add(dwg.text(text, insert=(x + 1, y + 1), fill='black',
+                     font_size=font_size, style='font-family:sans-serif'))
+    dwg.add(dwg.text(text, insert=(x, y), fill='white',
+                     font_size=font_size, style='font-family:sans-serif'))
+
+def draw_pose(dwg, pose, src_size, color='yellow', threshold=0.2):
+    box_x = 0
+    box_y = 0  
+    box_w = 641
+    box_h = 480
+    scale_x, scale_y = src_size[0] / box_w, src_size[1] / box_h
+    xys = {}
+    for label, keypoint in pose.keypoints.items():
+        if keypoint.score < threshold: continue
+        # Offset and scale to source coordinate space.
+        kp_y = int((keypoint.yx[0] - box_y) * scale_y)
+        kp_x = int((keypoint.yx[1] - box_x) * scale_x)
+
+        xys[label] = (kp_x, kp_y)
+        dwg.add(dwg.circle(center=(int(kp_x), int(kp_y)), r=5,
+                           fill='cyan', fill_opacity=keypoint.score, stroke=color))
+
+    for a, b in EDGES:
+        if a not in xys or b not in xys: continue
+        ax, ay = xys[a]
+        bx, by = xys[b]
+        dwg.add(dwg.line(start=(ax, ay), end=(bx, by), stroke=color, stroke_width=2))
+
+def draw_pose1(cv2_im, pose, src_size, color='yellow', threshold=0.2):
+    box_x = 0
+    box_y = 0  
+    box_w = 641
+    box_h = 480
+    scale_x, scale_y = src_size[0] / box_w, src_size[1] / box_h
+    xys = {}
+    for label, keypoint in pose.keypoints.items():
+        if keypoint.score < threshold: continue
+        # Offset and scale to source coordinate space.
+        kp_y = int((keypoint.yx[0] - box_y) * scale_y)
+        kp_x = int((keypoint.yx[1] - box_x) * scale_x)
+
+        xys[label] = (kp_x, kp_y)
+        cv2.circle(cv2_im,(int(kp_x),int(kp_y)),5,(0,255,255),-1)
+
+    for a, b in EDGES:
+        if a not in xys or b not in xys: continue
+        ax, ay = xys[a]
+        bx, by = xys[b]
+        cv2.line(cv2_im,(ax, ay), (bx, by),(0,255,255))
+
+def avg_fps_counter(window_size):
+    window = collections.deque(maxlen=window_size)
+    prev = time.monotonic()
+    yield 0.0  # First fps value.
+
+    while True:
+        curr = time.monotonic()
+        window.append(curr - prev)
+        prev = curr
+        yield len(window) / sum(window)
+
+
 #==============================
 def load_labels(path):
     p = re.compile(r'\s*(\d+)(.+)')
@@ -86,7 +153,7 @@ def get_output(interpreter, score_threshold, top_k, image_scale=1.0):
 
 def main():
     default_model_dir = '../all_models'
-    default_model = 'hand_tflite_graph_edgetpu.tflite'
+    default_model = 'posenet/posenet_mobilenet_v1_075_481_641_quant_decoder_edgetpu.tflite'
     default_labels = 'hand_label.txt'
     parser = argparse.ArgumentParser()
     parser.add_argument('--model', help='.tflite model path',
@@ -100,11 +167,16 @@ def main():
                         help='classifier score threshold')
     args = parser.parse_args()
 
-    print('Loading Handtracking model {} with {} labels.'.format(args.model, args.labels))
+    #print('Loading Handtracking model {} with {} labels.'.format(args.model, args.labels))
+
     #engine = DetectionEngine(args.model)
     #labels = load_labels(args.labels)
-    engine = PoseEngine('models/mobilenet/posenet_mobilenet_v1_075_481_641_quant_decoder_edgetpu.tflite')
-
+    #=====================================================================
+    src_size = (640, 480)
+    print('Loading Pose model {}'.format(args.model))
+    engine = PoseEngine(args.model)
+    #engine = PoseEngine('models/mobilenet/posenet_mobilenet_v1_075_481_641_quant_decoder_edgetpu.tflite')
+    #=====================================================================
     # for detection
     print('Loading Detection model {} with {} labels.'.format('../all_models/mobilenet_ssd_v2_coco_quant_postprocess_edgetpu.tflite', '../all_models/coco_labels.txt'))
     #interpreter2 = common.make_interpreter('../all_models/mobilenet_ssd_v2_coco_quant_postprocess_edgetpu.tflite')
@@ -123,26 +195,42 @@ def main():
         cv2_im_rgb = cv2.cvtColor(cv2_im, cv2.COLOR_BGR2RGB)
         pil_im = Image.fromarray(cv2_im_rgb)
 
-        #common.set_input(interpreter, pil_im)
-        #interpreter.invoke()
-        #objs = get_output(interpreter, score_threshold=args.threshold, top_k=args.top_k)
-        '''
-        objs = engine.detect_with_image(pil_im,
-                                  threshold=0.3,
-                                  keep_aspect_ratio=True,
-                                  relative_coord=True,
-                                  top_k=1)
-        '''
+        #======================================pose processing=================================
+        
         poses, inference_time = engine.DetectPosesInImage(np.uint8(pil_im.resize((641, 481), Image.NEAREST)))
+        print('Posese is',poses)
+    
+        n = 0
+        sum_process_time = 0
+        sum_inference_time = 0
+        ctr = 0
+        fps_counter  = avg_fps_counter(30)
+        
+        input_shape = engine.get_input_tensor_shape()
 
-        print('Inference time: %.fms' % inference_time)
+        svg_canvas = svgwrite.Drawing(cv2_im, size=src_size)
+
+        inference_size = (input_shape[2], input_shape[1])
+
+
+        print('Shape is',input_shape)
+        print('inference size is:',inference_size)
+        start_time = time.monotonic()
+        
+        end_time = time.monotonic()
+        n += 1
+        sum_process_time += 1000 * (end_time - start_time)
+        sum_inference_time += inference_time
+
+        avg_inference_time = sum_inference_time / n
+        text_line = 'PoseNet: %.1fms (%.2f fps) TrueFPS: %.2f' % (
+            avg_inference_time, 1000 / avg_inference_time, next(fps_counter)
+        )
+        
+        shadow_text(svg_canvas, 10, 20, text_line)
         for pose in poses:
-            if pose.score < 0.4: continue
-            print('\nPose Score: ', pose.score)
-            for label, keypoint in pose.keypoints.items():
-                print(' %-20s x=%-4d y=%-4d score=%.1f' %
-                    (label, keypoint.yx[1], keypoint.yx[0], keypoint.score))
-
+            draw_pose1(cv2_im, pose, src_size)
+        #==============================================================================================    
         #cv2_im = append_objs_to_img(cv2_im, objs, labels)
 
         # detection
@@ -175,6 +263,7 @@ def append_objs_to_img(cv2_im, objs, labels):
         cv2_im = cv2.putText(cv2_im, label, (x0, y0+30),
                              cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
     return cv2_im
+
 '''
 def draw_pose(dwg, pose, src_size, inference_box, color='yellow', threshold=0.2):
     dwg = svgwrite.Drawing('', size=src_size)

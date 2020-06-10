@@ -56,6 +56,7 @@ def shadow_text(dwg, x, y, text, font_size=16):
 
 
 def draw_pose(dwg, pose, src_size, inference_box, color='yellow', threshold=0.2):
+    print('inf box', inference_box)
     box_x, box_y, box_w, box_h = inference_box
     scale_x, scale_y = src_size[0] / box_w, src_size[1] / box_h
     xys = {}
