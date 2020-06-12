@@ -55,34 +55,13 @@ EDGES = (
     ('left knee', 'left ankle'),
     ('right knee', 'right ankle'),
 )
-def shadow_text(dwg, x, y, text, font_size=16):
-    dwg.add(dwg.text(text, insert=(x + 1, y + 1), fill='black',
-                     font_size=font_size, style='font-family:sans-serif'))
-    dwg.add(dwg.text(text, insert=(x, y), fill='white',
-                     font_size=font_size, style='font-family:sans-serif'))
-
-def draw_pose(dwg, pose, src_size, color='yellow', threshold=0.2):
-    box_x = 0
-    box_y = 0  
-    box_w = 641
-    box_h = 480
-    scale_x, scale_y = src_size[0] / box_w, src_size[1] / box_h
-    xys = {}
-    for label, keypoint in pose.keypoints.items():
-        if keypoint.score < threshold: continue
-        # Offset and scale to source coordinate space.
-        kp_y = int((keypoint.yx[0] - box_y) * scale_y)
-        kp_x = int((keypoint.yx[1] - box_x) * scale_x)
-
-        xys[label] = (kp_x, kp_y)
-        dwg.add(dwg.circle(center=(int(kp_x), int(kp_y)), r=5,
-                           fill='cyan', fill_opacity=keypoint.score, stroke=color))
-
-    for a, b in EDGES:
-        if a not in xys or b not in xys: continue
-        ax, ay = xys[a]
-        bx, by = xys[b]
-        dwg.add(dwg.line(start=(ax, ay), end=(bx, by), stroke=color, stroke_width=2))
+def shadow_text(cv2_im, x, y, text, font_size=16):
+    cv2_im = cv2.putText(cv2_im, text, (x + 1, y + 1),
+                             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
+    #dwg.add(dwg.text(text, insert=, fill='black',
+    #                 font_size=font_size, style='font-family:sans-serif'))
+    #dwg.add(dwg.text(text, insert=(x, y), fill='white',
+    #                 font_size=font_size, style='font-family:sans-serif'))
 
 def draw_pose1(cv2_im, pose, src_size, color='yellow', threshold=0.2):
     box_x = 0
@@ -208,7 +187,6 @@ def main():
         
         input_shape = engine.get_input_tensor_shape()
 
-        svg_canvas = svgwrite.Drawing(cv2_im, size=src_size)
 
         inference_size = (input_shape[2], input_shape[1])
 
@@ -227,7 +205,7 @@ def main():
             avg_inference_time, 1000 / avg_inference_time, next(fps_counter)
         )
         
-        shadow_text(svg_canvas, 10, 20, text_line)
+        shadow_text(cv2_im, 10, 20, text_line)
         for pose in poses:
             draw_pose1(cv2_im, pose, src_size)
         #==============================================================================================    
