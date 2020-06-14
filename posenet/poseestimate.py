@@ -26,6 +26,9 @@ from PIL import Image
 import re
 from edgetpu.detection.engine import DetectionEngine
 
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk
 
 
 import time
@@ -300,7 +303,7 @@ def main():
     cv2.destroyAllWindows()
 
 def append_objs_to_img(cv2_im, objs, labels):
-    
+    '''
     height, width, channels = cv2_im.shape
     for obj in objs:
         x0, y0, x1, y1 = obj.bounding_box.flatten().tolist() #list(obj.bbox)
@@ -384,7 +387,7 @@ def append_objs_to_img(cv2_im, objs, labels):
                 cv2_im=cv2.putText(cv2_im, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,0.5, color, 2)   
     
     #cv2.imshow("Social Distancing Detector", image)      
-    '''                 
+                     
     return cv2_im
 
 
