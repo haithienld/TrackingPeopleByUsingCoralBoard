@@ -26,6 +26,8 @@ from PIL import Image
 import re
 from edgetpu.detection.engine import DetectionEngine
 
+
+
 import time
 import svgwrite
 import gstreamer
@@ -298,7 +300,7 @@ def main():
     cv2.destroyAllWindows()
 
 def append_objs_to_img(cv2_im, objs, labels):
-    ''' Original Code
+    
     height, width, channels = cv2_im.shape
     for obj in objs:
         x0, y0, x1, y1 = obj.bounding_box.flatten().tolist() #list(obj.bbox)
@@ -311,22 +313,78 @@ def append_objs_to_img(cv2_im, objs, labels):
                              cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
     return cv2_im
     '''
+    
     height, width, channels = cv2_im.shape
-    classIDs = []
-    box_obj = []
-    confidences = []
-    for obj in objs:
 
+    boxes_ob = []
+    confidences = []
+    classIDs = []
+    for obj in objs:
         x0, y0, x1, y1 = obj.bounding_box.flatten().tolist() #list(obj.bbox)
         x0, y0, x1, y1 = int(x0*width), int(y0*height), int(x1*width), int(y1*height)
         percent = int(100 * obj.score)
-
+        confidence = obj.score
         label = '{}% {}'.format(percent, labels.get(obj.label_id, obj.label_id))
         if(labels.get(obj.label_id, obj.label_id)=='person'):
-            
-            cv2_im = cv2.rectangle(cv2_im, (x0, y0), (x1, y1), (0, 255, 0), 2)
-            cv2_im = cv2.putText(cv2_im, label, (x0, y0+30),
-                             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
+            classIDs.append(0)
+            confidences.append(float(confidence))
+            boxes_ob.append([x0, y0, x1,y1])
+            #cv2_im = cv2.rectangle(cv2_im, (x0, y0), (x1, y1), (0, 255, 0), 2)
+            #cv2_im = cv2.putText(cv2_im, label, (x0, y0+30),
+            #                 cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
+    idxs = cv2.dnn.NMSBoxes(boxes_ob, confidences, 0.5,0.3)
+    #print('idxs',idxs)
+    #print('classID',classIDs)
+    ind = []
+    for i in range(0,len(classIDs)):
+        if(classIDs[i]==0):
+            ind.append(i)
+    a = []
+    b = []
+
+    if len(idxs) > 0:
+            for i in idxs.flatten():
+                (x, y) = (boxes_ob[i][0], boxes_ob[i][1])
+                (w, h) = (boxes_ob[i][2], boxes_ob[i][3])
+                a.append(x)
+                b.append(y)
+    distance=[] 
+    nsd = []
+    for i in range(0,len(a)-1):
+        for k in range(1,len(a)):
+            if(k==i):
+                break
+            else:
+                x_dist = (a[k] - a[i])
+                y_dist = (b[k] - b[i])
+                d = math.sqrt(x_dist * x_dist + y_dist * y_dist)
+                distance.append(d)
+                if(d <=100):
+                    nsd.append(i)
+                    nsd.append(k)
+                nsd = list(dict.fromkeys(nsd))
+                print(nsd)
+    color = (0, 0, 255) 
+    for i in nsd:
+        (x, y) = (boxes_ob[i][0], boxes_ob[i][1])
+        (w, h) = (boxes_ob[i][2], boxes_ob[i][3])
+        cv2_im=cv2.rectangle(cv2_im, (x, y), (x + w, y + h), color, 2)
+        text = "Alert"
+        cv2_im=cv2.putText(cv2_im, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,0.5, color, 2)
+    color = (0, 255, 0) 
+    if len(idxs) > 0:
+        for i in idxs.flatten():
+            if (i in nsd):
+                break
+            else:
+                (x, y) = (boxes_ob[i][0], boxes_ob[i][1])
+                (w, h) = (boxes_ob[i][2], boxes_ob[i][3])
+                cv2_im=cv2.rectangle(cv2_im, (x, y), (x + w, y + h), color, 2)
+                text = 'OK'
+                cv2_im=cv2.putText(cv2_im, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,0.5, color, 2)   
+    
+    #cv2.imshow("Social Distancing Detector", image)      
+    '''                 
     return cv2_im
 
 
