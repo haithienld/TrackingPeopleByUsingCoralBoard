@@ -21,6 +21,7 @@ import common
 import cv2
 import numpy as np
 import os
+import math
 from PIL import Image
 import re
 from edgetpu.detection.engine import DetectionEngine
@@ -63,27 +64,41 @@ def shadow_text(cv2_im, x, y, text, font_size=16):
     #dwg.add(dwg.text(text, insert=(x, y), fill='white',
     #                 font_size=font_size, style='font-family:sans-serif'))
 
-def draw_pose1(cv2_im, pose, src_size, color='yellow', threshold=0.2):
+def draw_pose(cv2_im, pose, numobject, src_size, color='yellow', threshold=0.2):
     box_x = 0
     box_y = 0  
     box_w = 641
     box_h = 480
     scale_x, scale_y = src_size[0] / box_w, src_size[1] / box_h
     xys = {}
-    for label, keypoint in pose.keypoints.items():
+    coor_ave = {}
+    totalx = 0
+    totaly = 0
+    for label, keypoint in pose.keypoints.items():        
         if keypoint.score < threshold: continue
         # Offset and scale to source coordinate space.
         kp_y = int((keypoint.yx[0] - box_y) * scale_y)
         kp_x = int((keypoint.yx[1] - box_x) * scale_x)
-
-        xys[label] = (kp_x, kp_y)
+        cv2_im = cv2.putText(cv2_im, str(numobject),(kp_x + 1, kp_y + 1), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
+        xys[label] = (numobject,kp_x, kp_y)
+        totalx += kp_x
+        totaly += kp_y
         cv2.circle(cv2_im,(int(kp_x),int(kp_y)),5,(0,255,255),-1)
-
+    #lay vi tri trung binh cua pose.
+    coor_ave[numobject] = (totalx/len(xys),totaly/len(xys))
+    return xys,coor_ave
+    
+    '''
     for a, b in EDGES:
         if a not in xys or b not in xys: continue
-        ax, ay = xys[a]
-        bx, by = xys[b]
+        anum,ax, ay = xys[a]
+        bnum,bx, by = xys[b]
+        print(numobject,a,xys[a],b,xys[b])
         cv2.line(cv2_im,(ax, ay), (bx, by),(0,255,255))
+    '''
+def check_distance(keypoint1,keypoint2):
+    dist = math.sqrt((keypoint2[0]-keypoint1[0])**2 + (keypoint2[1]-keypoint1[1])**2)
+    return dist
 
 def avg_fps_counter(window_size):
     window = collections.deque(maxlen=window_size)
@@ -177,7 +192,7 @@ def main():
         #======================================pose processing=================================
         
         poses, inference_time = engine.DetectPosesInImage(np.uint8(pil_im.resize((641, 481), Image.NEAREST)))
-        print('Posese is',poses)
+        #print('Posese is',poses)
     
         n = 0
         sum_process_time = 0
@@ -187,12 +202,11 @@ def main():
         
         input_shape = engine.get_input_tensor_shape()
 
-
         inference_size = (input_shape[2], input_shape[1])
 
 
-        print('Shape is',input_shape)
-        print('inference size is:',inference_size)
+        #print('Shape is',input_shape)
+        #print('inference size is:',inference_size)
         start_time = time.monotonic()
         
         end_time = time.monotonic()
@@ -206,8 +220,60 @@ def main():
         )
         
         shadow_text(cv2_im, 10, 20, text_line)
+        numobject = 0
+        xys={}
+        coor_ave={}
+        #draw_pose(cv2_im, poses, dis, src_size)
         for pose in poses:
-            draw_pose1(cv2_im, pose, src_size)
+            '''
+        for i in range(len(poses)-1):
+            pose = poses[i]
+            
+            #print(pose.keypoints.items())
+            for label, keypoint in pose.keypoints.items():
+                #print(label)
+                #print(keypoint)
+                if keypoint.score < 0.2: continue
+                if (label=='nose'):
+                    print('yx0,',keypoint.yx)
+                    
+            for j in range(len(poses)):
+                pose1 = poses[j]
+                #print(pose.keypoints.items())
+                for label, keypoint in pose1.keypoints.items():
+                    if keypoint.score < 0.2: continue
+                    if (label=='nose'):
+                        print('yx1,',keypoint.yx)    
+            '''
+            
+            xys,coor_ave=draw_pose(cv2_im, pose, numobject, src_size)
+            numobject += 1
+            #print('len coor_av',coor_ave)
+            #print(xys,coor_ave)kghkkgkgkgerg.hbjbbsbdbs
+        
+        for a, b in EDGES:
+            if a not in xys or b not in xys: continue
+            anum,ax, ay = xys[a]
+            bnum,bx, by = xys[b]
+            #print(numobject,a,xys[a],b,xys[b])
+            cv2.line(cv2_im,(ax, ay), (bx, by),(0,255,255))
+        a = []
+        b = []
+        #leng = coor_ave.length
+        #print(leng)
+        '''
+        print('len coor',len(coor_ave))
+        for i in range(0,len(coor_ave)):
+            a=coor_ave[i]
+            print('aaaa',a)
+            for j in range(i+1,len(coor_ave)):
+                if(i==j):
+                    break
+                else:
+                    b=coor_ave[j]
+                    print('bbbb')
+                    print(b)
+                    '''
         #==============================================================================================    
         #cv2_im = append_objs_to_img(cv2_im, objs, labels)
 
@@ -220,6 +286,8 @@ def main():
                                   keep_aspect_ratio=True,
                                   relative_coord=True,
                                   top_k=3)
+                                
+
         cv2_im = append_objs_to_img(cv2_im, objs, labels2)
 
         cv2.imshow('frame', cv2_im)
@@ -230,6 +298,7 @@ def main():
     cv2.destroyAllWindows()
 
 def append_objs_to_img(cv2_im, objs, labels):
+    ''' Original Code
     height, width, channels = cv2_im.shape
     for obj in objs:
         x0, y0, x1, y1 = obj.bounding_box.flatten().tolist() #list(obj.bbox)
@@ -241,30 +310,25 @@ def append_objs_to_img(cv2_im, objs, labels):
         cv2_im = cv2.putText(cv2_im, label, (x0, y0+30),
                              cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
     return cv2_im
+    '''
+    height, width, channels = cv2_im.shape
+    classIDs = []
+    box_obj = []
+    confidences = []
+    for obj in objs:
 
-'''
-def draw_pose(dwg, pose, src_size, inference_box, color='yellow', threshold=0.2):
-    dwg = svgwrite.Drawing('', size=src_size)
-    src_size = (640, 480)
-    inference_box=
-    box_x, box_y, box_w, box_h = inference_box
-    scale_x, scale_y = src_size[0] / box_w, src_size[1] / box_h
-    xys = {}
-    for label, keypoint in pose.keypoints.items():
-        if keypoint.score < threshold: continue
-        # Offset and scale to source coordinate space.
-        kp_y = int((keypoint.yx[0] - box_y) * scale_y)
-        kp_x = int((keypoint.yx[1] - box_x) * scale_x)
+        x0, y0, x1, y1 = obj.bounding_box.flatten().tolist() #list(obj.bbox)
+        x0, y0, x1, y1 = int(x0*width), int(y0*height), int(x1*width), int(y1*height)
+        percent = int(100 * obj.score)
 
-        xys[label] = (kp_x, kp_y)
-        dwg.add(dwg.circle(center=(int(kp_x), int(kp_y)), r=5,
-                           fill='cyan', fill_opacity=keypoint.score, stroke=color))
+        label = '{}% {}'.format(percent, labels.get(obj.label_id, obj.label_id))
+        if(labels.get(obj.label_id, obj.label_id)=='person'):
+            
+            cv2_im = cv2.rectangle(cv2_im, (x0, y0), (x1, y1), (0, 255, 0), 2)
+            cv2_im = cv2.putText(cv2_im, label, (x0, y0+30),
+                             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
+    return cv2_im
 
-    for a, b in EDGES:
-        if a not in xys or b not in xys: continue
-        ax, ay = xys[a]
-        bx, by = xys[b]
-        dwg.add(dwg.line(start=(ax, ay), end=(bx, by), stroke=color, stroke_width=2))
-'''
+
 if __name__ == '__main__':
     main()

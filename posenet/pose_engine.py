@@ -120,7 +120,7 @@ class PoseEngine(BasicEngine):
                          mode='constant')
         img = img[0:self.image_height, 0:self.image_width]
         assert (img.shape == tuple(self._input_tensor_shape[1:]))
-
+        
         # Run the inference (API expects the data to be flattened)
         return self.ParseOutput(self.run_inference(img.flatten()))
 
