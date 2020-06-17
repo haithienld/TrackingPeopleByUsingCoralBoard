@@ -1,4 +1,3 @@
-
 # Copyright 2019 Google LLC
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -61,6 +60,13 @@ EDGES = (
     ('left knee', 'left ankle'),
     ('right knee', 'right ankle'),
 )
+
+HEADCHECK = ('nose', 'left eye','right eye' ,'left ear', 'right ear')
+SHOULDERCHECK = ('left shoulder', 'right shoulder') 
+HIPCHECK = ('left hip','right hip')
+KNEECHECK = ('left knee','right knee')
+ANKLECHECK = ('left ankle','right ankle')
+
 def shadow_text(cv2_im, x, y, text, font_size=16):
     cv2_im = cv2.putText(cv2_im, text, (x + 1, y + 1),
                              cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
@@ -69,16 +75,22 @@ def shadow_text(cv2_im, x, y, text, font_size=16):
     #dwg.add(dwg.text(text, insert=(x, y), fill='white',
     #                 font_size=font_size, style='font-family:sans-serif'))
 
-def draw_pose(cv2_im, pose, numobject, src_size, color='yellow', threshold=0.2):
+def draw_pose(cv2_im, cv2_sodidi, pose, numobject, src_size, color='yellow', threshold=0.2):
     box_x = 0
     box_y = 0  
     box_w = 641
     box_h = 480
     scale_x, scale_y = src_size[0] / box_w, src_size[1] / box_h
     xys = {}
-    coor_ave = {}
-    totalx = 0
-    totaly = 0
+    #==bien dung de tinh khoang cach giua cac bo phan trong co the ============
+    pts_sodidi = []
+    headarea={}
+    shoulderarea={}
+    elbow={}
+    lengbackbone=60
+    lengleg= 86
+    lengface = 30
+    #=======================================================
     for label, keypoint in pose.keypoints.items():        
         if keypoint.score < threshold: continue
         # Offset and scale to source coordinate space.
@@ -86,13 +98,65 @@ def draw_pose(cv2_im, pose, numobject, src_size, color='yellow', threshold=0.2):
         kp_x = int((keypoint.yx[1] - box_x) * scale_x)
         cv2_im = cv2.putText(cv2_im, str(numobject),(kp_x + 1, kp_y + 1), cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
         xys[label] = (numobject,kp_x, kp_y)
-        totalx += kp_x
-        totaly += kp_y
+        
         cv2.circle(cv2_im,(int(kp_x),int(kp_y)),5,(0,255,255),-1)
-    #lay vi tri trung binh cua pose.
-    coor_ave[numobject] = (totalx/len(xys),totaly/len(xys))
-    return xys,coor_ave
+
+    #draw pose in 2d plane========================
+    checkankle, checkknee,checkhip,checkshoulder,checkhead = False,False, False,False,False
+    knee,hip,shoulder,head = {},{},{},{}
+    pts_in = np.array([[1.0, 1.0]], dtype='float32')
+    for a in ANKLECHECK:
+        if a in xys:
+            _,x1,y1 = xys[a]
+            pts_in = np.array([[x1, y1]], dtype='float32')
+        
+        else:
+            for b in KNEECHECK:
+                if b in xys: 
+                    checkknee = True
+                    knee = xys[b]
+            for c in HIPCHECK:
+                if c in xys:
+                    checkhip = True
+                    hip = xys[c]
+            for d in SHOULDERCHECK:
+                if d in xys:
+                    checkshoulder = True
+                    shoulder = xys[d]
+            for e in HEADCHECK:
+                if e in xys:
+                    checkhead = True
+                    head = xys[e]
+            if checkknee == True and checkhip == True:
+                _,x1,y1 = knee
+                _,x2,y2 = hip 
+                leeeng =  check_distance(x1,y1,x2,y2)
+                pts_in = np.array([[x1, y1 + leeeng/2]], dtype='float32')
+                break
+            if checkhip == True and checkshoulder == True:
+                _,x1,y1 = shoulder
+                _,x2,y2 = hip 
+                leeeng =  check_distance(x1,y1,x2,y2)
+                pts_in = np.array([[x2, y2 + lengleg*leeeng/lengbackbone]], dtype='float32')
+                break
+            if checkhead == True and checkshoulder == True:
+                _,x1,y1 = shoulder
+                _,x2,y2 = head 
+                leeeng =  check_distance(x1,y1,x2,y2)
+                pts_in = np.array([[x1, y1 + (lengleg+lengbackbone)*leeeng/lengface]], dtype='float32')    
+                break
+        
+    pts_in = np.array([pts_in])        
+    pts_out = mapcamto2dplane(pts_in)
+    #print(len(pts_out))
+    #print(pts_out[0][0,0])
+    #print(pts_out[0][0,1])
+    pts_sodidi = np.array([numobject,pts_out[0][0,0],pts_out[0][0,1]])
+    #cv2_sodidi = cv2.circle(cv2_sodidi,(int(pts_out[0][0,0]),int(pts_out[0][0,1])),5,(0,255,255),-1)
+        #=============================================
+    return pts_sodidi, xys
     
+
     '''
     for a, b in EDGES:
         if a not in xys or b not in xys: continue
@@ -101,8 +165,28 @@ def draw_pose(cv2_im, pose, numobject, src_size, color='yellow', threshold=0.2):
         print(numobject,a,xys[a],b,xys[b])
         cv2.line(cv2_im,(ax, ay), (bx, by),(0,255,255))
     '''
-def check_distance(keypoint1,keypoint2):
-    dist = math.sqrt((keypoint2[0]-keypoint1[0])**2 + (keypoint2[1]-keypoint1[1])**2)
+
+def mapcamto2dplane(pts_in):
+    # provide points from image 1
+    pts_src = np.array([[154, 174], [702, 349], [702, 572],[1, 572], [1, 191]])
+    # corresponding points from image 2 (i.e. (154, 174) matches (212, 80))
+    pts_dst = np.array([[154, 174], [702, 349], [702, 572],[1, 572], [1, 191]])#np.array([[212, 80],[489, 80],[505, 180],[367, 235], [144,153]])
+
+    # calculate matrix H
+    h, status = cv2.findHomography(pts_src, pts_dst)
+
+    # provide a point you wish to map from image 1 to image 2
+    #pts_in = np.array([[154, 174]], dtype='float32')
+    #pts_in = np.array([pts_in])
+
+    # finally, get the mapping
+    pointsOut = cv2.perspectiveTransform(pts_in, h)
+    pointsOut = np.array([pointsOut])
+    point_out = [b for a in pointsOut for b in a]
+    return point_out
+
+def check_distance(x1,y1,x2,y2):
+    dist = math.sqrt((x2-x1)**2 + (y2-y1)**2)
     return dist
 
 def avg_fps_counter(window_size):
@@ -182,18 +266,19 @@ def main():
     #interpreter2.allocate_tensors()
     engine2 = DetectionEngine('../all_models/mobilenet_ssd_v2_coco_quant_postprocess_edgetpu.tflite')
     labels2 = load_labels('../all_models/coco_labels.txt')
-
     cap = cv2.VideoCapture(args.camera_idx)
-
     while cap.isOpened():
         ret, frame = cap.read()
         if not ret:
             break
         cv2_im = frame
 
+        
         cv2_im_rgb = cv2.cvtColor(cv2_im, cv2.COLOR_BGR2RGB)
         pil_im = Image.fromarray(cv2_im_rgb)
-
+        #declare new window for show pose in 2d plane========================
+        h_cap, w_cap, _ = cv2_im.shape
+        cv2_sodidi = np.zeros((h_cap,w_cap,3), np.uint8)
         #======================================pose processing=================================
         
         poses, inference_time = engine.DetectPosesInImage(np.uint8(pil_im.resize((641, 481), Image.NEAREST)))
@@ -227,7 +312,9 @@ def main():
         shadow_text(cv2_im, 10, 20, text_line)
         numobject = 0
         xys={}
-        coor_ave={}
+        pts_sodidi_arr=[]
+        pts_xys_arr=[]
+        listwarning=[]
         #draw_pose(cv2_im, poses, dis, src_size)
         for pose in poses:
             '''
@@ -250,35 +337,57 @@ def main():
                     if (label=='nose'):
                         print('yx1,',keypoint.yx)    
             '''
+            pts_sodidi, xys = draw_pose(cv2_im,cv2_sodidi, pose, numobject, src_size)
+            #print(pts_sodidi)
+            pts_sodidi_arr.append(pts_sodidi)
+            pts_xys_arr.append(xys)
             
-            xys,coor_ave=draw_pose(cv2_im, pose, numobject, src_size)
             numobject += 1
             #print('len coor_av',coor_ave)
             #print(xys,coor_ave)kghkkgkgkgerg.hbjbbsbdbs
+        pts_sodidi_arr = np.array([pts_sodidi_arr])
+        v2 = [b for a in pts_sodidi_arr for b in a]
+        print(v2)
+        print(xys)
+        print(numobject)
         
-        for a, b in EDGES:
-            if a not in xys or b not in xys: continue
-            anum,ax, ay = xys[a]
-            bnum,bx, by = xys[b]
-            #print(numobject,a,xys[a],b,xys[b])
-            cv2.line(cv2_im,(ax, ay), (bx, by),(0,255,255))
-        a = []
-        b = []
         #leng = coor_ave.length
         #print(leng)
-        '''
-        print('len coor',len(coor_ave))
-        for i in range(0,len(coor_ave)):
-            a=coor_ave[i]
-            print('aaaa',a)
-            for j in range(i+1,len(coor_ave)):
-                if(i==j):
+
+        
+        
+        
+        
+        #for a in pts_sodidi_arr:
+        #    for b in a:
+        #        print(b[0])
+        
+        for i in range(0,len(v2)):
+            a,x1,y1 = v2[i]
+            for j in range(1,len(v2)):
+                if i == j:
                     break
-                else:
-                    b=coor_ave[j]
-                    print('bbbb')
-                    print(b)
-                    '''
+                b,x2,y2 = v2[j]
+                distance = check_distance(x1,y1,x2,y2)
+                print('distance',distance)
+                if distance > 100:
+                    cv2_sodidi = cv2.circle(cv2_sodidi,(int(x1),int(y1)),5,(0,0,255),-1)
+                    cv2_sodidi = cv2.circle(cv2_sodidi,(int(x2),int(y2)),5,(0,0,255),-1)
+                    listwarning.append(i)
+                    listwarning.append(j)
+                else:   
+                    cv2_sodidi = cv2.circle(cv2_sodidi,(int(x1),int(y1)),5,(255,0,0),-1)
+                    cv2_sodidi = cv2.circle(cv2_sodidi,(int(x2),int(y2)),5,(255,0,0),-1)
+        print('listwarning',listwarning)
+        for a, b in EDGES:
+            if a not in xys or b not in xys: continue
+            num,ax, ay = xys[a]
+            num,bx, by = xys[b]
+            if num in listwarning:
+            #print(numobject,a,xys[a],b,xys[b])
+                cv2.line(cv2_im,(ax, ay), (bx, by),(0,0,255))
+            else:
+                cv2.line(cv2_im,(ax, ay), (bx, by),(255,0,0))
         #==============================================================================================    
         #cv2_im = append_objs_to_img(cv2_im, objs, labels)
 
@@ -294,29 +403,33 @@ def main():
                                 
 
         cv2_im = append_objs_to_img(cv2_im, objs, labels2)
-
+       
         cv2.imshow('frame', cv2_im)
+        cv2.imshow('1', cv2_sodidi)
+        
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
     cap.release()
     cv2.destroyAllWindows()
 
+
+
 def append_objs_to_img(cv2_im, objs, labels):
-    '''
+    
     height, width, channels = cv2_im.shape
     for obj in objs:
         x0, y0, x1, y1 = obj.bounding_box.flatten().tolist() #list(obj.bbox)
         x0, y0, x1, y1 = int(x0*width), int(y0*height), int(x1*width), int(y1*height)
         percent = int(100 * obj.score)
         label = '{}% {}'.format(percent, labels.get(obj.label_id, obj.label_id))
-
-        cv2_im = cv2.rectangle(cv2_im, (x0, y0), (x1, y1), (0, 255, 0), 2)
-        cv2_im = cv2.putText(cv2_im, label, (x0, y0+30),
-                             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
+        if(labels.get(obj.label_id, obj.label_id)=='person'):
+            cv2_im = cv2.rectangle(cv2_im, (x0, y0), (x1, y1), (0, 255, 0), 2)
+            cv2_im = cv2.putText(cv2_im, label, (x0, y0+30),
+                                cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 2)
     return cv2_im
-    '''
     
+    '''
     height, width, channels = cv2_im.shape
 
     boxes_ob = []
@@ -362,7 +475,7 @@ def append_objs_to_img(cv2_im, objs, labels):
                 y_dist = (b[k] - b[i])
                 d = math.sqrt(x_dist * x_dist + y_dist * y_dist)
                 distance.append(d)
-                if(d <=100):
+                if(d <=1000):
                     nsd.append(i)
                     nsd.append(k)
                 nsd = list(dict.fromkeys(nsd))
@@ -387,9 +500,8 @@ def append_objs_to_img(cv2_im, objs, labels):
                 cv2_im=cv2.putText(cv2_im, text, (x, y - 5), cv2.FONT_HERSHEY_SIMPLEX,0.5, color, 2)   
     
     #cv2.imshow("Social Distancing Detector", image)      
-                     
     return cv2_im
-
+    '''
 
 if __name__ == '__main__':
     main()
