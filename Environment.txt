@@ -66,10 +66,11 @@ pip3 install Pillow
 https://coral.ai/docs/accelerator/get-started/#1-install-the-edge-tpu-runtime
 Add our Debian package repository to your system:
 
-echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
+#echo "deb https://packages.cloud.google.com/apt coral-edgetpu-stable main" | sudo tee /etc/apt/sources.list.d/coral-edgetpu.list
 
-curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
+#curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | sudo apt-key add -
 
+sudo apt-get install python3-edgetpu
 sudo apt-get update
 
 Install the Edge TPU runtime:
@@ -77,7 +78,7 @@ sudo apt-get install libedgetpu1-std
 
 #install tflite_runtime 
 https://www.tensorflow.org/lite/guide/python
-pip3 install https://dl.google.com/coral/python/tflite_runtime-2.1.0.post1-cp37-cp37m-linux_armv7l.whl
+pip3 install https://dl.google.com/coral/python/tflite_runtime-2.1.0.post1-cp37-cp37m-linux_aarch64.whl
 
 #install edgetpu
 #sudo apt-get install build-essential libpython3-dev libuse-1.0-0-dev
