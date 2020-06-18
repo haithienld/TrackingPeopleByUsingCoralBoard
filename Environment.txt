@@ -55,7 +55,15 @@ bash install_requirements.sh
 sudo apt-get purge '*opencv*'
 
 
-#sudo apt install python3-opencv should install opencv 4.2 as above guide
+#sudo apt install python3-opencv should install opencv 4.2 as bellow guide(above for raspi)
+https://medium.com/@balaji_85683/installing-opencv-4-0-on-google-coral-dev-board-5c3a69d7f52f 
+Build finish
+$ ls /usr/local/python/cv2/python-3.7
+cv2.cpython-37m-x86_64-linux-gnu.so
+$ cd /usr/local/python/cv2/python-3.7
+$ sudo mv cv2.cpython-37m-x86_64-linux-gnu.so cv2.so
+$cd /usr/local/lib/python3.7/dist-packages 
+$ln -s /usr/local/python/cv2/python-3.7/cv2.so cv2.so
 pip3 install common 
 pip3 install svgwrite
 sudo apt-get install -y libqtgui4
