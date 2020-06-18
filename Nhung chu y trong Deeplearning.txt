@@ -1,0 +1,270 @@
+What types of data are you working with? *
+Images
+Video
+Volumetric
+Audio & Speech
+Text
+Graphs
+Other...
+
+Application Domain. 
+
+Image Classification
+Facial Recognition
+Action Recognition
+Big Data
+Natural Language Processing
+Medical
+Speech Recognition
+Object Recognition
+Machine Learning Algorithms/Research
+Other...
+
+
+Deep Learning Framwork
+
+Cafferun jupyter notebook with port and ip
+Caffe2
+Chainer
+CNTK(Microsoft Cognitive Toolkit)
+Deeplearning4j
+Keras
+MATLAB
+MxNet
+TensorFlow
+Theano
+Torch/PyTorch
+Other (please specify)
+
+auto code complete: github.com/alexwalchli/visualstudiocode-tensorflow 
+Chi copy phan setting.json
+
+https://superuser.com/questions/1113022/how-do-i-remove-vs-code-settings-from-ubuntu
+
+Su dung deep learning cho tu sua chua phan mem may tinh.
+Why does “(base)” appear in front of my terminal prompt?
+
+This can also be because auto_activate_base is set to True. You can check this using the following command
+
+conda config --show | grep auto_activate_base
+To set it false
+
+conda config --set auto_activate_base False
+
+
+//===============
+
+//========remove nvidia driver
+sudo apt-get purge nvidia-*
+
+//=======INSTALL CUDA===================
+https://gist.github.com/Mahedi-61/2a2f1579d4271717d421065168ce6a73
+nvidia-smi
+nvcc -V
+
+
+tham khảo 
+https://www.tensorflow.org/install/gpu
+
+or 
+
+
+The first three steps are like j-money said:
+
+First remove any nvidia packages you might have had laying around
+
+ 	sudo apt-get purge nvidia*
+
+Add the repository to your repo list
+
+	sudo add-apt-repository ppa:graphics-drivers
+
+And update
+
+	sudo apt-get update
+
+Then enter the following
+
+	ubuntu-drivers devices
+
+in terminal which gives the following output:
+
+== /sys/devices/pci0000:00/0000:00:01.0/0000:01:00.0 ==
+modalias : pci:v000010DEd00001B81sv00001462sd00003302bc03sc00i00
+vendor   : NVIDIA Corporation
+model    : GP104 [GeForce GTX 1070]
+driver   : nvidia-driver-410 - third-party free
+driver   : nvidia-driver-396 - third-party free
+driver   : nvidia-driver-415 - third-party free recommended
+driver   : nvidia-driver-390 - third-party free
+driver   : xserver-xorg-video-nouveau - distro free builtin
+
+Now one may take the recommended driver from the list and installs it by
+
+	sudo apt-get install nvidia-driver-415
+
+
+
+//===INSTALL CONDA==========
+https://medium.com/datadriveninvestor/install-tensorflow-gpu-to-use-nvidia-gpu-on-ubuntu-18-04-do-ai-71b0ce64ebc5
+
+wget https://repo.anaconda.com/archive/Anaconda3-5.2.0-Linux-x86_64.sh
+sha256sum Anaconda3-5.2.0-Linux-x86_64.sh
+
+Continue reading here
+https://www.digitalocean.com/community/tutorials/how-to-install-the-anaconda-python-distribution-on-ubuntu-16-04
+
+check conda env: numba -s
+
+if numba does not recognise lib 
+read 
+http://numba.pydata.org/numba-doc/latest/user/installing.html#installing-using-pip-on-x86-x86-64-platforms
+
+Delete a no longer needed virtual environment
+
+conda remove --name myenv --all
+conda info --envs
+//=========INSTALL TENSORFLOW====================
+https://www.tensorflow.org/install/pip
+
+> pip install --upgrade "tensorflow==1.7.*"
+//====check tensorflow anaconda=====
+conda list | grep tensorflow
+pip show tensorflow
+
+python3 -m pip uninstall protobuf    
+python3 -m pip uninstall tensorflow-gpu
+
+Taking pictures. Downloading data. 
+Storing data. 
+
+//========check GPU===================
+nvidia-smi
+
+ps -aux | grep 5300
+
+//===========access server==================
+ssh tommy@147.47.206.150 abcd1234!
+jupyter-notebook --ip=0.0.0.0 --port=55555
+scp -r tommy@147.47.206.150:Multi-Label-Text-Classification ./tareviews/
+ps -ef | grep python
+ssh tommy@147.46.89.141 -p 30022 @bcd1234
+python3 retrain.py --image_dir ~/TensorflowMobile/flower_photos/
+copy từ local
+scp -r <local_dir> <user>@<remote_host>:<remote_dir>
+
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config, ...)
+
+
+pip install tf-nightly-gpu
+
+//=====USING GIT==========================
+create git by ssh
+
+	ssh-keygen -t rsa -C "haithienld@gmail.com"
+
+	back to ~/home/
+
+	vi ~/.ssh/id_rsa.pub 
+
+copy all to github vao phan setting 
+https://github.com/settings/profile ssh and gpg key
+
+sau do git clone thu muc ve 
+
+	git clone git@github.com:haithienld/tfmobile.git
+tao file
+	git add file   /.gitignore
+	git commit -am "this is first test commit"
+	git push origin
+	git status
+
+	git checkout master chuyen sang master de lam viec
+	
+	fatal: in unpopulated submodule
+    git rm --cached . -f 
+    https://www.atlassian.com/git/tutorials/saving-changes/gitignore#git-ignore-patterns
+	https://codelabs.developers.google.com/codelabs/tensorflow-for-poets-2/#0
+
+hhhaaahhaha
+Federated Learning: The Future of Distributed Machine Learning
+In 2017 Google introduced Federated Learning (FL)
+
+Dear Professor and others. 
+Let me share the progress of my work.
+
+Huawei mobile:
+      This week, I am investigating about Federated Learning: The Future of Distributed Machine Learning after reading a paper that is name 
+
+"TOWARDS FEDERATED LEARNING AT SCALE: SYSTEM DESIGN"
+Bonawitz, Keith, et al. "Towards Federated Learning at Scale: System Design." arXiv preprint arXiv:1902.01046 (2019).
+Federated Learning (FL) is introduced by Google in 2017. 
+
+I will try to implement this model and then show the framework of it as an image.
+
+//=============Xóa port trong linux============================
+sudo ss -lptn 'sport = :4040'
+kill -9 ....id 
+netstat -tupln | grep 12345@
+//===================================================
+//Cac cach fix loi
+it's because you didn't install TensorFlow from sources to take advantage of all these settings. You can choose to install TensorFlow from sources -- the process might take up to 30 minutes. To silence the warning, add this before importing TensorFlow: 
+
+Fix 
+import os
+os.environ['TF_CPP_MIN_LOG_LEVEL']='2'
+
+import os
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+
+import tensorflow as tf
+if type(tf.contrib) != type(tf): tf.contrib._warning = None
+
+vào window mở cmd administrator: powercfg -h off nếu bị ko copy paste được 
+
+
+05df99aa64897bb28c2587a602161a5cca6e0cbeaa732f9a&token=05df99aa64897bb28c2587a602161a5cca6e0cbeaa732f9a
+
+Cài đặt Pytorch
+
+conda create -n pytorch_env python=3.6
+pip install pytorch torchvision -c pytorch
+
+================================================================
+Coral Board: 
+remove network:sudo rm /etc/NetworkManager/system-connections/NAME
+ fdisk -l
+insert card:
+https://github.com/f0cal/google-coral/issues/61
+Format disk
+ sudo mkfs.ext4 /dev/mmcblk1
+# mount it to /mnt 
+sudo mount /dev/mmcblk1 /mnt
+
+sudo echo "/dev/mmcblk1 /mnt ext4 defaults 0 1" >> /etc/fstab
+or
+sudo nano -Bw /etc/fstab
+/dev/mmcblk1 /mnt ext4 defaults 0 1
+sudo chmod -R 777 /mnt/
+
+Xem danh sach lists update
+/var/lib/apt/lists/
+
+//https://help.ubuntu.com/community/Fstab
+
+install tflite_runtime
+https://www.tensorflow.org/lite/guide/python
+
+
+========================================
+Mask_RCNN nếu bị lỗi from mrcnn import model as modellib
+
+pip install --upgrade scikit-image==0.14.2
+
+sudo nano .bashrc to load file from startup.
+sudo apt install fonts-unfonts-core
+sudo apt install ibus-hangul
+
+
