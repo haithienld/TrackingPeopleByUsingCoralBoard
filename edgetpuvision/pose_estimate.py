@@ -131,7 +131,7 @@ def incretest(A):
             return False
     return True
 
-def overlay(engine, title, objs, inference_size, inference_time, layout, idx, upcnt, downcnt, threshold=0.2):
+def overlay(engine, title, objs, inference_size, inference_time, layout, idx, threshold=0.2):
     x0, y0, width, height = layout.window
     font_size = 0.03 * height
 
@@ -187,31 +187,7 @@ def overlay(engine, title, objs, inference_size, inference_time, layout, idx, up
         'Objects: %d' % len(objs),
         'Inference time: %.2f ms (%.2f fps)' % (inference_time * 1000, 1.0 / inference_time)
     ]'''
-
-    # Training Info
-    lines = []
-    if not (None in training):
-        #print(training)
-        label1 = 'Standing UP (' + str(upcnt) + ')'
-        label2 = 'Sitting DOWN (' + str(downcnt) + ')'
-        if incretest(training):
-            upcnt += 1
-            label1 = 'Standing UP (' + str(upcnt) + ')'
-        elif decretest(training):
-            downcnt += 1
-            label2 = 'Sitting DOWN (' + str(downcnt) + ')'
-        lines = [
-            'Workout: %s, %s' % (label1, label2),
-            'Inference time: %.2f ms (%.2f fps)' % (inference_time * 1000, 1.0 / inference_time)
-        ]
-
-    for i, line in enumerate(reversed(lines)):
-        y = oy2 - i * 1.7 * font_size
-        doc += svg.Rect(x=0, y=0, width=size_em(len(line)), height='1em',
-                       transform='translate(%s, %s) scale(1,-1)' % (ox, y), _class='back')
-        doc += svg.Text(line, x=ox, y=y, fill='white')
-
-    return str(doc), idx, upcnt, downcnt
+    return str(doc), idx
 
 
 def convert(obj, labels):
@@ -249,7 +225,6 @@ def render_gen(args):
 
     output = None
     idx = 0
-    upcnt, downcnt = 0, 0
     while True:
         tensor, layout, command = (yield output)
 
@@ -264,7 +239,7 @@ def render_gen(args):
                 print_results(outputs)
 
             title = titles[engine]
-            output, idx, upcnt, downcnt = overlay(engine, title, outputs, inference_size, inference_time, layout, idx, upcnt, downcnt)
+            output, idx = overlay(engine, title, outputs, inference_size, inference_time, layout, idx)
         else:
             output = None
 
@@ -272,7 +247,6 @@ def render_gen(args):
             draw_overlay = not draw_overlay
         elif command == 'n':
             engine = next(engines)
-
 
 def add_render_gen_args(parser):
     default_model_dir = 'all_models'
