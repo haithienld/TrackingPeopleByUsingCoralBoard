@@ -250,7 +250,8 @@ def render_gen(args):
 
 def add_render_gen_args(parser):
     default_model_dir = 'all_models'
-    default_model = '/posenet_mobilenet_v1_075_481_641_quant_decoder_edgetpu.tflite'
+    default_model = '/posenet_mobilenet_v1_075_41_641_quant_decoder_edgetpu.tflite'
+    default_labels = 'hand_label.txt'
     parser.add_argument('--model', help='.tflite model path',
                         default=os.path.join(default_model_dir,default_model))
     parser.add_argument('--labels', help='label file path',
