@@ -29,6 +29,19 @@ python3 -m edgetpuvision.detect \
 import argparse
 import collections
 import colorsys
+#================
+import common
+import cv2
+import numpy as np
+import os
+import math
+from PIL import Image
+import re
+
+import gi
+gi.require_version('Gtk', '3.0')
+from gi.repository import Gtk
+#=========================
 import itertools
 import time
 
@@ -60,16 +73,11 @@ EDGES = (
     ('right knee', 'right ankle'),
 )
 
-TRAINING = (
-    #('left shoulder', 'left wrist'),
-    #('right shoulder', 'right wrist'),
-    #('left wrist', 'left hip'),
-    #('right wrist', 'right hip'),
-    ('left hip', 'left ankle'),
-    #('right hip', 'right ankle'),
-)
-TRAINING_SIZE = 4
-training = [None] * TRAINING_SIZE
+HEADCHECK = ('nose', 'left eye','right eye' ,'left ear', 'right ear')
+SHOULDERCHECK = ('left shoulder', 'right shoulder') 
+HIPCHECK = ('left hip','right hip')
+KNEECHECK = ('left knee','right knee')
+ANKLECHECK = ('left ankle','right ankle')
 
 CSS_STYLES = str(svg.CssStyle({'.back': svg.Style(fill='black',
                                                   stroke='black',
@@ -105,8 +113,9 @@ def make_get_color(color, labels):
 
     return lambda obj_id: 'white'
 
+
+
 def caldist(x1, y1, x2, y2):
-    import math
     dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
     return dist
 
@@ -122,7 +131,7 @@ def incretest(A):
             return False
     return True
 
-def overlay(engine, title, objs, inference_size, inference_time, layout, idx, upcnt, downcnt, threshold=0.2):
+def overlay(engine, title, objs, inference_size, inference_time, layout, idx, threshold=0.2):
     x0, y0, width, height = layout.window
     font_size = 0.03 * height
 
@@ -179,38 +188,9 @@ def overlay(engine, title, objs, inference_size, inference_time, layout, idx, up
         'Inference time: %.2f ms (%.2f fps)' % (inference_time * 1000, 1.0 / inference_time)
     ]'''
 
-    # Training Info
-    lines = []
-    if not (None in training):
-        #print(training)
-        label1 = 'Standing UP (' + str(upcnt) + ')'
-        label2 = 'Sitting DOWN (' + str(downcnt) + ')'
-        if incretest(training):
-            upcnt += 1
-            label1 = 'Standing UP (' + str(upcnt) + ')'
-        elif decretest(training):
-            downcnt += 1
-            label2 = 'Sitting DOWN (' + str(downcnt) + ')'
-        lines = [
-            'Workout: %s, %s' % (label1, label2),
-            'Inference time: %.2f ms (%.2f fps)' % (inference_time * 1000, 1.0 / inference_time)
-        ]
-
-    for i, line in enumerate(reversed(lines)):
-        y = oy2 - i * 1.7 * font_size
-        doc += svg.Rect(x=0, y=0, width=size_em(len(line)), height='1em',
-                       transform='translate(%s, %s) scale(1,-1)' % (ox, y), _class='back')
-        doc += svg.Text(line, x=ox, y=y, fill='white')
-
     return str(doc), idx, upcnt, downcnt
 
 
-def convert(obj, labels):
-    x0, y0, x1, y1 = obj.bounding_box.flatten().tolist()
-    return Object(id=obj.label_id,
-                  label=labels[obj.label_id] if labels else None,
-                  score=obj.score,
-                  bbox=BBox(x=x0, y=y0, w=x1 - x0, h=y1 - y0))
 
 def print_results(objs):
     from datetime import datetime
@@ -243,7 +223,7 @@ def render_gen(args):
     upcnt, downcnt = 0, 0
     while True:
         tensor, layout, command = (yield output)
-
+        
         inference_rate = next(fps_counter)
         if draw_overlay:
             start = time.monotonic()
@@ -255,7 +235,7 @@ def render_gen(args):
                 print_results(outputs)
 
             title = titles[engine]
-            output, idx, upcnt, downcnt = overlay(engine, title, outputs, inference_size, inference_time, layout, idx, upcnt, downcnt)
+            output, idx = overlay(engine, title, outputs, inference_size, inference_time, layout, idx)
         else:
             output = None
 
