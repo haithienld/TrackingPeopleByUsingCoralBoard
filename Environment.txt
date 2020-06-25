@@ -105,3 +105,5 @@ sudo apt install libgirepository1.0-dev gcc libcairo2-dev pkg-config python3-dev
 pip3 install pycairo
 pip3 install PyGObject
 
+img = np.hstack((img1, img2))
+
