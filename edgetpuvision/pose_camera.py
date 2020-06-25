@@ -23,10 +23,6 @@ from PIL import Image
 import svgwrite
 import gstreamer
 
-from . import svg
-from . import utils
-from .apps import run_app
-
 from pose_engine import PoseEngine
 
 EDGES = (
@@ -51,44 +47,6 @@ EDGES = (
     ('right knee', 'right ankle'),
 )
 
-CSS_STYLES = str(svg.CssStyle({'.back': svg.Style(fill='black',
-                                                  stroke='black',
-                                                  stroke_width='0.5em'),
-                               '.bbox': svg.Style(fill_opacity=0.0,
-                                                  stroke_width='0.1em')}))
-
-BBox = collections.namedtuple('BBox', ('x', 'y', 'w', 'h'))
-BBox.area = lambda self: self.w * self.h
-BBox.scale = lambda self, sx, sy: BBox(x=self.x * sx, y=self.y * sy,
-                                       w=self.w * sx, h=self.h * sy)
-BBox.__str__ = lambda self: 'BBox(x=%.2f y=%.2f w=%.2f h=%.2f)' % self
-
-Object = collections.namedtuple('Object', ('id', 'label', 'score', 'bbox'))
-Object.__str__ = lambda self: 'Object(id=%d, label=%s, score=%.2f, %s)' % self
-
-def size_em(length):
-    return '%sem' % str(0.6 * (length + 1))
-
-def color(i, total):
-    return tuple(int(255.0 * c) for c in colorsys.hsv_to_rgb(i / total, 1.0, 1.0))
-
-def make_palette(keys):
-    return {key : svg.rgb(color(i, len(keys))) for i, key in enumerate(keys)}
-
-def make_get_color(color, labels):
-    if color:
-        return lambda obj_id: color
-
-    if labels:
-        palette = make_palette(labels.keys())
-        return lambda obj_id: palette[obj_id]
-
-    return lambda obj_id: 'white'
-
-def caldist(x1, y1, x2, y2):
-    import math
-    dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
-    return dist
 
 def shadow_text(dwg, x, y, text, font_size=16):
     dwg.add(dwg.text(text, insert=(x + 1, y + 1), fill='black',
@@ -118,6 +76,16 @@ def draw_pose(dwg, pose, src_size, inference_box, color='yellow', threshold=0.2)
         bx, by = xys[b]
         dwg.add(dwg.line(start=(ax, ay), end=(bx, by), stroke=color, stroke_width=2))
 
+def avg_fps_counter(window_size):
+    window = collections.deque(maxlen=window_size)
+    prev = time.monotonic()
+    yield 0.0  # First fps value.
+
+    while True:
+        curr = time.monotonic()
+        window.append(curr - prev)
+        prev = curr
+        yield len(window) / sum(window)
 
 def run(inf_callback, render_callback):
     parser = argparse.ArgumentParser(formatter_class=argparse.ArgumentDefaultsHelpFormatter)
