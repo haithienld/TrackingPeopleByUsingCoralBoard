@@ -234,6 +234,7 @@ def get_output(interpreter, score_threshold, top_k, image_scale=1.0):
 
     return [make(i) for i in range(top_k) if scores[i] >= score_threshold]
 
+def add_render_gen_args(parser):
 def main():
     default_model_dir = '../all_models'
     default_model = 'posenet/posenet_mobilenet_v1_075_481_641_quant_decoder_edgetpu.tflite'

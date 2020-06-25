@@ -266,12 +266,17 @@ def render_gen(args):
 
 
 def add_render_gen_args(parser):
-    parser.add_argument('--model',
-                        help='.tflite model path', required=True)
-    parser.add_argument('--labels',
-                        help='labels file path')
-    parser.add_argument('--top_k', type=int, default=10,
-                        help='Max number of objects to detect')
+    default_model_dir = '../all_models'
+    default_model = 'posenet/posenet_mobilenet_v1_075_481_641_quant_decoder_edgetpu.tflite'
+    default_labels = 'hand_label.txt'
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--model', help='.tflite model path',
+                        default=os.path.join(default_model_dir,default_model))
+    parser.add_argument('--labels', help='label file path',
+                        default=os.path.join(default_model_dir, default_labels))
+    parser.add_argument('--top_k', type=int, default=1,
+                        help='number of categories with highest score to display')
+    parser.add_argument('--camera_idx', type=str, help='Index of which video source to use. ', default = 0)
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Detection threshold')
     parser.add_argument('--min_area', type=float, default=0.0,
