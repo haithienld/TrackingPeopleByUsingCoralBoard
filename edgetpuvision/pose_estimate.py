@@ -32,11 +32,44 @@ import colorsys
 import itertools
 import time
 
-from edgetpu.detection.engine import DetectionEngine
-
 from . import svg
 from . import utils
 from .apps import run_app
+
+from .pose_engine import PoseEngine
+
+EDGES = (
+    ('nose', 'left eye'),
+    ('nose', 'right eye'),
+    ('nose', 'left ear'),
+    ('nose', 'right ear'),
+    ('left ear', 'left eye'),
+    ('right ear', 'right eye'),
+    ('left eye', 'right eye'),
+    ('left shoulder', 'right shoulder'),
+    ('left shoulder', 'left elbow'),
+    ('left shoulder', 'left hip'),
+    ('right shoulder', 'right elbow'),
+    ('right shoulder', 'right hip'),
+    ('left elbow', 'left wrist'),
+    ('right elbow', 'right wrist'),
+    ('left hip', 'right hip'),
+    ('left hip', 'left knee'),
+    ('right hip', 'right knee'),
+    ('left knee', 'left ankle'),
+    ('right knee', 'right ankle'),
+)
+
+TRAINING = (
+    #('left shoulder', 'left wrist'),
+    #('right shoulder', 'right wrist'),
+    #('left wrist', 'left hip'),
+    #('right wrist', 'right hip'),
+    ('left hip', 'left ankle'),
+    #('right hip', 'right ankle'),
+)
+TRAINING_SIZE = 4
+training = [None] * TRAINING_SIZE
 
 CSS_STYLES = str(svg.CssStyle({'.back': svg.Style(fill='black',
                                                   stroke='black',
@@ -72,7 +105,24 @@ def make_get_color(color, labels):
 
     return lambda obj_id: 'white'
 
-def overlay(title, objs, get_color, inference_time, inference_rate, layout):
+def caldist(x1, y1, x2, y2):
+    import math
+    dist = math.sqrt((x2 - x1)**2 + (y2 - y1)**2)
+    return dist
+
+def decretest(A):
+    for i in range( len(A) - 1 ):
+        if A[i] <= A[i+1]:
+            return False
+    return True
+
+def incretest(A):
+    for i in range( len(A) - 1 ):
+        if A[i] >= A[i+1]:
+            return False
+    return True
+
+def overlay(engine, title, objs, inference_size, inference_time, layout, idx, upcnt, downcnt, threshold=0.2):
     x0, y0, width, height = layout.window
     font_size = 0.03 * height
 
@@ -84,23 +134,35 @@ def overlay(title, objs, get_color, inference_time, inference_rate, layout):
                   font_size=font_size, font_family='monospace', font_weight=500)
     doc += defs
 
-    for obj in objs:
-        percent = int(100 * obj.score)
-        if obj.label:
-            caption = '%d%% %s' % (percent, obj.label)
-        else:
-            caption = '%d%%' % percent
+    box_x, box_y, box_w, box_h = 0, 0, inference_size[0], inference_size[1]
+    scale_x, scale_y = width / box_w, height / box_h
+    for pose in objs:
+        xys = {}
+        kp_dist = {} # distance between keypoints
+        for label, keypoint in pose.keypoints.items():
+            if keypoint.score < threshold: continue
+            percent = int(100 * keypoint.score)
 
-        x, y, w, h = obj.bbox.scale(*layout.size)
-        color = get_color(obj.id)
+            # Offset and scale to source coordinate space.
+            kp_y = int((keypoint.yx[0] - box_y) * scale_y)
+            kp_x = int((keypoint.yx[1] - box_x) * scale_x)
+            xys[label] = (kp_x, kp_y)
 
-        doc += svg.Rect(x=x, y=y, width=w, height=h,
-                        style='stroke:%s' % color, _class='bbox')
-        doc += svg.Rect(x=x, y=y+h ,
-                        width=size_em(len(caption)), height='1.2em', fill=color)
-        t = svg.Text(x=x, y=y+h, fill='black')
-        t += svg.TSpan(caption, dy='1em')
-        doc += t
+            doc += svg.Circle(cx=kp_x, cy=kp_y, r=5, fill='cyan')
+
+        for a, b in EDGES:
+            if a not in xys or b not in xys: continue
+            ax, ay = xys[a]
+            bx, by = xys[b]
+            doc += svg.Line(x1=ax, y1=ay, x2=bx, y2=by, stroke='black', stroke_width=1)
+
+        for a, b in TRAINING:
+            if a not in xys or b not in xys: continue
+            ax, ay = xys[a]
+            bx, by = xys[b]
+            dist = caldist(ax, ay, bx, by)
+            training[idx % TRAINING_SIZE] = int(dist)
+            idx += 1
 
     ox = x0 + 20
     oy1, oy2 = y0 + 20 + font_size, y0 + height - 20
@@ -112,10 +174,27 @@ def overlay(title, objs, get_color, inference_time, inference_rate, layout):
         doc += svg.Text(title, x=ox, y=oy1, fill='white')
 
     # Info
-    lines = [
+    '''lines = [
         'Objects: %d' % len(objs),
         'Inference time: %.2f ms (%.2f fps)' % (inference_time * 1000, 1.0 / inference_time)
-    ]
+    ]'''
+
+    # Training Info
+    lines = []
+    if not (None in training):
+        #print(training)
+        label1 = 'Standing UP (' + str(upcnt) + ')'
+        label2 = 'Sitting DOWN (' + str(downcnt) + ')'
+        if incretest(training):
+            upcnt += 1
+            label1 = 'Standing UP (' + str(upcnt) + ')'
+        elif decretest(training):
+            downcnt += 1
+            label2 = 'Sitting DOWN (' + str(downcnt) + ')'
+        lines = [
+            'Workout: %s, %s' % (label1, label2),
+            'Inference time: %.2f ms (%.2f fps)' % (inference_time * 1000, 1.0 / inference_time)
+        ]
 
     for i, line in enumerate(reversed(lines)):
         y = oy2 - i * 1.7 * font_size
@@ -123,7 +202,7 @@ def overlay(title, objs, get_color, inference_time, inference_rate, layout):
                        transform='translate(%s, %s) scale(1,-1)' % (ox, y), _class='back')
         doc += svg.Text(line, x=ox, y=y, fill='white')
 
-    return str(doc)
+    return str(doc), idx, upcnt, downcnt
 
 
 def convert(obj, labels):
@@ -133,8 +212,10 @@ def convert(obj, labels):
                   score=obj.score,
                   bbox=BBox(x=x0, y=y0, w=x1 - x0, h=y1 - y0))
 
-def print_results(inference_rate, objs):
-    print('\nInference (rate=%.2f fps):' % inference_rate)
+def print_results(objs):
+    from datetime import datetime
+    print(datetime.now())
+    #print('\nInference (rate=%.2f fps):' % inference_rate)
     for i, obj in enumerate(objs):
         print('    %d: %s, area=%.2f' % (i, obj, obj.bbox.area()))
 
@@ -143,90 +224,38 @@ from PIL import Image
 import numpy as np
 from datetime import datetime
 #import cv2
-import math
-
 def render_gen(args):
     fps_counter  = utils.avg_fps_counter(30)
 
-    engines, titles = utils.make_engines(args.model, DetectionEngine)
-    assert utils.same_input_image_sizes(engines)
+    engines, titles = utils.make_engines(args.model, PoseEngine)
+    #assert utils.same_input_image_sizes(engines)
     engines = itertools.cycle(engines)
     engine = next(engines)
-
-    labels = utils.load_labels(args.labels) if args.labels else None
-    filtered_labels = set(l.strip() for l in args.filter.split(',')) if args.filter else None
-    print(filtered_labels)
-    get_color = make_get_color(args.color, labels)
-
-    # hand tracking engine
-    if args.hand_tracking:
-        engines_hand, _ = utils.make_engines('/home/mendel/google-coral/examples-camera/all_models/hand_tflite_graph_edgetpu.tflite', DetectionEngine)
-        engines_hand = itertools.cycle(engines_hand)
-        engine_hand = next(engines_hand)
-        labels_hand = utils.load_labels('/home/mendel/google-coral/examples-camera/all_models/hand_label.txt')
-    # face detection engine
-    if args.face_detection:
-        engines_face, _ = utils.make_engines('/home/mendel/google-coral/examples-camera/all_models/mobilenet_ssd_v2_face_quant_postprocess_edgetpu.tflite', DetectionEngine)
-        engines_face = itertools.cycle(engines_face)
-        engine_face = next(engines_face)
+    input_shape = engine.get_input_tensor_shape()
+    inference_size = (input_shape[2], input_shape[1])
 
     draw_overlay = True
 
     yield utils.input_image_size(engine)
 
     output = None
+    idx = 0
+    upcnt, downcnt = 0, 0
     while True:
         tensor, layout, command = (yield output)
 
         inference_rate = next(fps_counter)
         if draw_overlay:
             start = time.monotonic()
-            objs = engine .detect_with_input_tensor(tensor, threshold=0.5, top_k=10)
-            im = tensor
-            if args.hand_tracking:
-                objs_hand = engine_hand .detect_with_input_tensor(tensor, threshold=0.1, top_k=1)
-            if args.face_detection:
-                W, H = utils.input_image_size(engine)
-                im = np.reshape(im, (W, H, 3))
-                im = Image.fromarray(im)
-                objs_face = engine_face .detect_with_image(im, threshold=0.5, top_k=10)
+            inf_output = engine.run_inference(tensor)
+            outputs, _ = engine.ParseOutput(inf_output)
             inference_time = time.monotonic() - start
-            objs = [convert(obj, labels) for obj in objs]
-            if args.hand_tracking:
-                objs_hand = [convert(obj, labels_hand) for obj in objs_hand]
-            if args.face_detection:
-                objs_face = [convert(obj, None) for obj in objs_face]
 
-            if labels and filtered_labels:
-                objs = [obj for obj in objs if obj.label in filtered_labels]
-
-            objs = [obj for obj in objs if args.min_area <= obj.bbox.area() <= args.max_area]
-            if args.hand_tracking:
-                objs = objs + objs_hand
-            if args.face_detection:
-                objs = objs + objs_face
-
-            if args.save and len(objs) > 0:
-                W, H = utils.input_image_size(engine)
-                im = np.reshape(im, (W, H, 3))
-                im = Image.fromarray(im)
-                for obj in objs:
-                    x, y, w, h = obj.bbox
-                    # scale up to real size
-                    x, y, w, h = int(x * W), int(y * H), int(w * W), int(h * H)
-                    crop_rectangle = (x, y, x+w, y+h)
-                    det = im.crop(crop_rectangle)
-                    det = det.resize((64, 128))
-                    #dt_str = datetime.now().strftime("%Y-%m-%d_%H:%M:%S.%f")[:-3]
-                    dt_str = datetime.now().strftime("%Y-%m-%d_%H:%M:%S")
-                    name = obj.label + "-" + dt_str + ".png"
-                    det.save("images/" + name)
-
-            if args.print and len(objs) > 0:
-                print_results(inference_rate, objs)
+            if args.print and len(outputs) > 0:
+                print_results(outputs)
 
             title = titles[engine]
-            output = overlay(title, objs, get_color, inference_time, inference_rate, layout)
+            output, idx, upcnt, downcnt = overlay(engine, title, outputs, inference_size, inference_time, layout, idx, upcnt, downcnt)
         else:
             output = None
 
@@ -235,25 +264,13 @@ def render_gen(args):
         elif command == 'n':
             engine = next(engines)
 
-def append_objs_to_img(im, objs, labels):
-    width, height, channels = im.shape
-    for obj in objs:
-        x, y, w, h = list(obj.bbox)
-        x0, y0, x1, y1 = int(x*width), int(y*height), int(w*width), int(h*height)
-        percent = int(100 * obj.score)
-        label = '{}% {}'.format(percent, labels.get(obj.id, obj.id))
-
-        im = cv2.rectangle(im, (x0, y0), (x1, y1), (0, 255, 0), 1)
-        im = cv2.putText(im, label, (x0, y0),
-                             cv2.FONT_HERSHEY_SIMPLEX, 1.0, (255, 0, 0), 1)
-    return im
 
 def add_render_gen_args(parser):
     parser.add_argument('--model',
                         help='.tflite model path', required=True)
     parser.add_argument('--labels',
                         help='labels file path')
-    parser.add_argument('--top_k', type=int, default=50,
+    parser.add_argument('--top_k', type=int, default=10,
                         help='Max number of objects to detect')
     parser.add_argument('--threshold', type=float, default=0.5,
                         help='Detection threshold')
@@ -267,10 +284,6 @@ def add_render_gen_args(parser):
                         help='Bounding box display color'),
     parser.add_argument('--print', default=False, action='store_true',
                         help='Print inference results')
-    parser.add_argument('--hand_tracking', default=False, action='store_true',
-                        help='Use handtracking')
-    parser.add_argument('--face_detection', default=False, action='store_true',
-                        help='Use Face detection')
     parser.add_argument('--save', default=False, action='store_true',
                         help='Save detected objects')
 
