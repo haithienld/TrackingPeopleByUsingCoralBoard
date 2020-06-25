@@ -98,7 +98,7 @@ def run(inf_callback, render_callback):
     parser.add_argument('--jpeg', help='Use image/jpeg input', action='store_true')
     args = parser.parse_args()
 
-    default_model = '../all_models/posenet/posenet_mobilenet_v1_075_%d_%d_quant_decoder_edgetpu.tflite'
+    default_model = '/posenet_mobilenet_v1_075_%d_%d_quant_decoder_edgetpu.tflite'
     if args.res == '480x360':
         src_size = (640, 480)
         appsink_size = (480, 360)
@@ -125,35 +125,38 @@ def run(inf_callback, render_callback):
                            jpeg=args.jpeg
                            )
 
-def run_inference(engine, input_tensor):
-        return engine.run_inference(input_tensor)
 
-def render_overlay(engine, output, src_size, inference_box):
-    nonlocal n, sum_process_time, sum_inference_time, fps_counter
-
-    svg_canvas = svgwrite.Drawing('', size=src_size)
-    start_time = time.monotonic()
-    outputs, inference_time = engine.ParseOutput(output)
-    end_time = time.monotonic()
-    n += 1
-    sum_process_time += 1000 * (end_time - start_time)
-    sum_inference_time += inference_time
-
-    avg_inference_time = sum_inference_time / n
-    text_line = 'PoseNet: %.1fms (%.2f fps) TrueFPS: %.2f Nposes %d' % (
-        avg_inference_time, 1000 / avg_inference_time, next(fps_counter), len(outputs)
-    )
-
-    shadow_text(svg_canvas, 10, 20, text_line)
-    for pose in outputs:
-        draw_pose(svg_canvas, pose, src_size, inference_box)
-        return (svg_canvas.tostring(), False)
 def main():
     n = 0
     sum_process_time = 0
     sum_inference_time = 0
     ctr = 0
     fps_counter  = avg_fps_counter(30)
+
+    def run_inference(engine, input_tensor):
+        return engine.run_inference(input_tensor)
+
+    def render_overlay(engine, output, src_size, inference_box):
+        nonlocal n, sum_process_time, sum_inference_time, fps_counter
+
+        svg_canvas = svgwrite.Drawing('', size=src_size)
+        start_time = time.monotonic()
+        outputs, inference_time = engine.ParseOutput(output)
+        end_time = time.monotonic()
+        n += 1
+        sum_process_time += 1000 * (end_time - start_time)
+        sum_inference_time += inference_time
+
+        avg_inference_time = sum_inference_time / n
+        text_line = 'PoseNet: %.1fms (%.2f fps) TrueFPS: %.2f Nposes %d' % (
+            avg_inference_time, 1000 / avg_inference_time, next(fps_counter), len(outputs)
+        )
+
+        shadow_text(svg_canvas, 10, 20, text_line)
+        for pose in outputs:
+            draw_pose(svg_canvas, pose, src_size, inference_box)
+        return (svg_canvas.tostring(), False)
+
     run(run_inference, render_overlay)
 
 
