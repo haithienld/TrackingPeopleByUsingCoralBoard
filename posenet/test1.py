@@ -74,13 +74,6 @@ def draw_pose(cv2_im, cv2_sodidi, pose, numobject, src_size, color='yellow', thr
     box_h = 480
     scale_x, scale_y = src_size[0] / box_w, src_size[1] / box_h
     xys = {}
-    pts_sodidi = []
-    headarea={}
-    shoulderarea={}
-    elbow={}
-    lengbackbone=60
-    lengleg= 86
-    lengface = 30
     for label, keypoint in pose.keypoints.items():        
         if keypoint.score < threshold: continue
         # Offset and scale to source coordinate space.
@@ -92,16 +85,6 @@ def draw_pose(cv2_im, cv2_sodidi, pose, numobject, src_size, color='yellow', thr
         cv2.circle(cv2_im,(int(kp_x),int(kp_y)),5,(0,255,255),-1)
 
     return xys
-    
-
-    '''
-    for a, b in EDGES:
-        if a not in xys or b not in xys: continue
-        anum,ax, ay = xys[a]
-        bnum,bx, by = xys[b]
-        print(numobject,a,xys[a],b,xys[b])
-        cv2.line(cv2_im,(ax, ay), (bx, by),(0,255,255))
-    '''
 
 def avg_fps_counter(window_size):
     window = collections.deque(maxlen=window_size)
@@ -181,15 +164,9 @@ def main():
         shadow_text(cv2_im, 10, 20, text_line)
         numobject = 0
         xys={}
-        pts_sodidi_arr=[]
-        pts_xys_arr=[]
-        listwarning=[]
         #draw_pose(cv2_im, poses, dis, src_size)
         for pose in poses:
-            pts_sodidi, xys = draw_pose(cv2_im,cv2_sodidi, pose, numobject, src_size)
-            #print(pts_sodidi)
-            pts_sodidi_arr.append(pts_sodidi)
-            pts_xys_arr.append(xys)
+            xys = draw_pose(cv2_im,cv2_sodidi, pose, numobject, src_size)
             
         for a, b in EDGES:
             if a not in xys or b not in xys: continue
