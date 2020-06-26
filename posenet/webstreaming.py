@@ -2,7 +2,6 @@
 # python webstreaming.py --ip 0.0.0.0 --port 8000
 
 # import the necessary packages
-from pyimagesearch.motion_detection import SingleMotionDetector
 from imutils.video import VideoStream
 from flask import Response
 from flask import Flask
@@ -22,12 +21,6 @@ lock = threading.Lock()
 
 # initialize a flask object
 app = Flask(__name__)
-
-# initialize the video stream and allow the camera sensor to
-# warmup
-#vs = VideoStream(usePiCamera=1).start()
-vs = VideoStream(src=0).start()
-time.sleep(2.0)
 
 @app.route("/")
 def index():
@@ -52,20 +45,9 @@ class VideoCamera(object):
         # We are using Motion JPEG, but OpenCV defaults to capture raw images,
         # so we must encode it into JPEG in order to correctly display the
         # video stream.
-        ret, jpeg = cv2.imencode('.jpg', image)
-        return jpeg.tobytes()
+        flag, encodedImage = cv2.imencode(".jpg",image)
+        return encodedImage.tobytes()
 
-		(flag, encodedImage) = cv2.imencode(".jpg", image)
-
-		# ensure the frame was successfully encoded
-		if not flag:
-			continue
-
-		# yield the output frame in the byte format
-		yield(b'--frame\r\n' b'Content-Type: image/jpeg\r\n\r\n' + 
-			bytearray(encodedImage) + b'\r\n')
-
-from camera import VideoCamera
 def gen(camera):
     while True:
         frame = camera.get_frame()
@@ -87,19 +69,8 @@ if __name__ == '__main__':
 		help="ip address of the device")
 	ap.add_argument("-o", "--port", type=int, required=True,
 		help="ephemeral port number of the server (1024 to 65535)")
-	ap.add_argument("-f", "--frame-count", type=int, default=32,
-		help="# of frames used to construct the background model")
 	args = vars(ap.parse_args())
-
-	# start a thread that will perform motion detection
-	t = threading.Thread(target=detect_motion, args=(
-		args["frame_count"],))
-	t.daemon = True
-	t.start()
 
 	# start the flask app
 	app.run(host=args["ip"], port=args["port"], debug=True,
 		threaded=True, use_reloader=False)
-
-# release the video stream pointer
-vs.stop()
