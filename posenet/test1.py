@@ -29,12 +29,21 @@ import gi
 gi.require_version('Gtk', '3.0')
 from gi.repository import Gtk
 
+import base64
+import cv2
+import zmq
 
 import time
 import svgwrite
 import gstreamer
 from pose_engine import PoseEngine
 import tflite_runtime.interpreter as tflite
+
+
+
+context = zmq.Context()
+footage_socket = context.socket(zmq.PUB)
+footage_socket.connect('tcp://192.168.100.76:4664') #localhost:4664')
 
 #==============================
 EDGES = (
@@ -58,6 +67,7 @@ EDGES = (
     ('left knee', 'left ankle'),
     ('right knee', 'right ankle'),
 )
+
 
 def shadow_text(cv2_im, x, y, text, font_size=16):
     cv2_im = cv2.putText(cv2_im, text, (x + 1, y + 1),
@@ -173,10 +183,11 @@ def main():
             num,ax, ay = xys[a]
             num,bx, by = xys[b]
             cv2.line(cv2_im,(ax, ay), (bx, by),(0,0,255))
-        
-        cv2.imshow('frame', cv2_im)
-        cv2.imshow('1', cv2_sodidi)
-        
+
+        encoded, buffer = cv2.imencode('.jpg', frame)
+        jpg_as_text = base64.b64encode(buffer)
+        footage_socket.send(jpg_as_text)
+
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
